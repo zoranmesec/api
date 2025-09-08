@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Country } from '../entities/country.entity';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { CreateCountryInput } from '../dtos/create-country.input';
 import { UpdateCountryInput } from '../dtos/update-country.input';
 import { FindCountriesInput } from '../dtos/find-countries.input';
@@ -13,6 +13,7 @@ export interface CountryFindParams {
 
 @Injectable()
 export class CountriesService {
+  private readonly logger = new Logger(CountriesService.name);
   constructor(
     @InjectRepository(Country)
     private countriesRepository: Repository<Country>,
@@ -29,6 +30,12 @@ export class CountriesService {
   findByIds(ids: string[]): Promise<Country[]> {
     const qb = this.countriesRepository.createQueryBuilder('country');
     return qb.whereInIds(ids).getMany();
+  }
+
+  findBySlugs(slugs: string[]): Promise<Country[]> {
+    return this.countriesRepository.find({
+      where: { slug: In(slugs) },
+    });
   }
 
   find(params: FindCountriesInput = {}): Promise<Country[]> {

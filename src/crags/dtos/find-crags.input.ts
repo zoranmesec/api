@@ -8,6 +8,10 @@ export class FindCragsInput {
   @IsOptional()
   country?: string;
 
+  @Field(() => [String], { nullable: true })
+  @IsOptional()
+  countrySlugs?: string[];
+
   @Field({ nullable: true })
   @IsOptional()
   type?: CragType;
@@ -24,13 +28,17 @@ export class FindCragsInput {
   @IsOptional()
   areaSlug?: string;
 
+  @Field(() => [String], { nullable: true })
+  @IsOptional()
+  areasSlugs?: string[];
+
   @Field({ nullable: true })
   @IsOptional()
   showPrivate?: boolean;
 
-  @Field({ nullable: true })
+  @Field(() => [String], { nullable: true })
   @IsOptional()
-  routeTypeId?: string;
+  routeTypeId?: string[];
 
   @Field({ nullable: true })
   @IsOptional()
@@ -39,6 +47,18 @@ export class FindCragsInput {
   @Field({ nullable: true })
   @IsOptional()
   slug?: string;
+
+  @Field(() => [String], { nullable: true })
+  @IsOptional()
+  orientations?: string[];
+
+  @Field({ nullable: true })
+  @IsOptional()
+  minGrade?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  maxGrade?: number;
 
   // deprecated (ignored), frontend should handle this if necessary on crag list
   @Field({ nullable: true })

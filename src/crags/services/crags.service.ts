@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateCragInput } from '../dtos/create-crag.input';
 import { Crag } from '../entities/crag.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -25,6 +25,7 @@ import { InjectQueue } from '@nestjs/bull';
 
 @Injectable()
 export class CragsService {
+  private readonly logger = new Logger(CragsService.name);
   constructor(
     @InjectRepository(Route)
     protected routesRepository: Repository<Route>,
@@ -207,6 +208,21 @@ export class CragsService {
       });
     }
 
+    // conditions: `(${alias}.publishStatus IN (:...publishStatuses) OR (${alias}.user_id = :userId AND ${alias}.publishStatus = :publishStatus))`,
+    // params: {
+    //   publishStatuses: ['published', 'in_review'],
+    //   userId: user.id,
+    //   publishStatus: 'draft',
+    // },
+
+    if (params.countrySlugs != null) {
+      builder
+        .leftJoin('c.country', 'country', 'c.country_id = country.id')
+        .where('country.slug IN (:...countrySlugs)', {
+          countrySlugs: params.countrySlugs,
+        });
+    }
+
     if (params.peakId != null) {
       builder.andWhere('c.peak = :peakId', {
         peakId: params.peakId,
@@ -243,6 +259,30 @@ export class CragsService {
       });
     }
 
+    if (params.areasSlugs != null && params.areasSlugs.length > 0) {
+      builder.innerJoin('c.area', 'area', 'area.slug IN (:...areasSlugs)', {
+        areasSlugs: params.areasSlugs,
+      });
+    }
+
+    if (params.orientations != null && params.orientations.length > 0) {
+      builder.andWhere('c.orientation in (:...orientations)', {
+        orientations: params.orientations,
+      });
+    }
+
+    if (params.minGrade != null) {
+      builder.andWhere('c.minDifficulty <= :minGrade', {
+        minGrade: params.minGrade,
+      });
+    }
+
+    if (params.maxGrade != null) {
+      builder.andWhere('c.maxDifficulty >= :maxGrade', {
+        maxGrade: params.maxGrade,
+      });
+    }
+
     if (!(params.user != null)) {
       builder.andWhere('c.is_hidden = false');
     }
@@ -259,7 +299,7 @@ export class CragsService {
     builder.addSelect('COUNT(route.id)', 'routeCount');
 
     if (params.routeTypeId != null) {
-      builder.andWhere('(route.route_type_id = :routeTypeId)', {
+      builder.andWhere('(route.route_type_id in (:...routeTypeId))', {
         routeTypeId: params.routeTypeId,
       });
     }
