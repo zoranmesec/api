@@ -1,5 +1,6 @@
 import { InputType, Field } from '@nestjs/graphql';
 import { IsOptional } from 'class-validator';
+import { CommentType } from '../entities/comment.entity';
 
 @InputType()
 export class UpdateCommentInput {
@@ -12,4 +13,7 @@ export class UpdateCommentInput {
   @Field({ nullable: true })
   @IsOptional()
   exposedUntil: Date;
+
+  @Field()
+  type: CommentType;
 }
