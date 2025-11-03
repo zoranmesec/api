@@ -47,6 +47,9 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { Area } from '../entities/area.entity';
 import { AreaLoader } from '../loaders/area.loader';
 import { FindCragsServiceInput } from '../dtos/find-crags-service.input';
+import { Route } from '../entities/route.entity';
+import { RoutesService } from '../services/routes.service';
+import { FindRoutesInput } from '../dtos/find-routes.input';
 
 @Resolver(() => Crag)
 @UseInterceptors(DataLoaderInterceptor)
@@ -54,6 +57,7 @@ export class CragsResolver {
   constructor(
     private cragsService: CragsService,
     private sectorsService: SectorsService,
+    private routesService: RoutesService,
     private commentsService: CommentsService,
     private entityPropertiesService: EntityPropertiesService,
     private notificationService: NotificationService,
@@ -179,6 +183,22 @@ export class CragsResolver {
       return Promise.resolve(crag.routeCount);
     }
     return this.cragsService.getNumberOfRoutes(crag, user);
+  }
+
+  @ResolveField('routes', () => [Route])
+  @AllowAny()
+  @UseGuards(UserAuthGuard)
+  async getRoutes(
+    @Parent() crag: Crag,
+    @Args('input', { nullable: true })
+    input: FindRoutesInput = {},
+    @CurrentUser() user: User,
+  ): Promise<Route[]> {
+    return this.routesService.find({
+      ...input,
+      cragId: crag.id,
+      user,
+    });
   }
 
   @ResolveField('sectors', () => [Sector])

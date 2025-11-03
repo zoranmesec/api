@@ -358,6 +358,24 @@ export class RoutesService {
       });
     }
 
+    if (params.minGrade != null) {
+      builder.andWhere('s.difficulty > :minGrade', {
+        minGrade: params.minGrade,
+      });
+    }
+
+    if (params.maxGrade != null) {
+      builder.andWhere('s.difficulty < :maxGrade', {
+        maxGrade: params.maxGrade,
+      });
+    }
+
+    if (params.cragId != null) {
+      builder.andWhere('s.cragId = :cragId', {
+        cragId: params.cragId,
+      });
+    }
+
     await setPublishStatusParams(builder, 's', params);
 
     setBuilderCache(builder);
