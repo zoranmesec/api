@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PaginationMeta } from '../../core/utils/pagination-meta.class';
 import { Route } from '../../crags/entities/route.entity';
@@ -378,11 +378,15 @@ export class ActivityRoutesService {
       });
     }
 
+    if (params.routeId != null && params.routeId.length > 0) {
+      builder.andWhere('ar.route_id = :routeId', { routeId: params.routeId });
+    }
+
     return builder.getMany();
   }
 
   // TODO: DRY
-  async finbByClubSlug(
+  async findByClubSlug(
     user: User,
     clubSlug: string,
     params: FindActivityRoutesInput = {},

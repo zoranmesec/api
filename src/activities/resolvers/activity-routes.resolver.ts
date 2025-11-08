@@ -117,6 +117,17 @@ export class ActivityRoutesResolver {
   }
 
   @UseGuards(UserAuthGuard)
+  @Query(() => PaginatedActivityRoutes)
+  routeActivities(
+    @CurrentUser() currentUser: User,
+    @Args('input', { nullable: true }) input: FindActivityRoutesInput = {},
+    @Info() info: GraphQLResolveInfo,
+  ): Promise<PaginatedActivityRoutes> {
+    info.cacheControl.setCacheHint({ scope: CacheScope.Private });
+    return this.activityRoutesService.paginate(input, currentUser);
+  }
+
+  @UseGuards(UserAuthGuard)
   @Query(() => [StatsRoutes])
   myRoutesStatistics(
     @CurrentUser() currentUser: User,
@@ -219,7 +230,7 @@ export class ActivityRoutesResolver {
     @Info() info: GraphQLResolveInfo,
   ): Promise<PaginatedActivityRoutes> {
     info.cacheControl.setCacheHint({ scope: CacheScope.Private });
-    return this.activityRoutesService.finbByClubSlug(user, clubSlug, input);
+    return this.activityRoutesService.findByClubSlug(user, clubSlug, input);
   }
 
   @AllowAny()
