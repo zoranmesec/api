@@ -616,15 +616,27 @@ export class ActivityRoutesService {
       });
     }
 
+    if (params.minGrade != null) {
+      builder.andWhere('coalesce(p.difficulty, r.difficulty) >= :minGrade', {
+        minGrade: params.minGrade,
+      });
+    }
+
+    if (params.maxGrade != null) {
+      builder.andWhere('coalesce(p.difficulty, r.difficulty) <= :maxGrade', {
+        maxGrade: params.maxGrade,
+      });
+    }
+
     if (params.ascentType != null) {
       builder.andWhere('ar.ascent_type IN (:...ascentType)', {
         ascentType: params.ascentType,
       });
     }
 
-    if (params.publish != null) {
-      builder.andWhere('ar."publish" IN (:...publish)', {
-        publish: params.publish,
+    if (params.routeTypes != null) {
+      builder.andWhere('r.route_type_id IN(:...routeTypes)', {
+        routeTypes: params.routeTypes,
       });
     }
 
@@ -657,13 +669,19 @@ export class ActivityRoutesService {
       builder.andWhere("r.publish_status = 'published'");
     } else {
       // Allow showing users own ascents and all public ascents
-      builder.andWhere(
-        '(ar.user_id = :userId OR ar."publish" IN (:...publish))',
-        {
-          userId: currentUser.id,
-          publish: ['public'],
-        },
-      );
+      if (params.publish != null) {
+        builder.andWhere('ar."publish" IN (:...publish)', {
+          publish: params.publish,
+        });
+      } else {
+        builder.andWhere(
+          '(ar.user_id = :userId OR ar."publish" IN (:...publish))',
+          {
+            userId: currentUser.id,
+            publish: ['public'],
+          },
+        );
+      }
       // TODO: should also allow showing club ascents
 
       if (currentUser.isAdmin()) {
@@ -680,7 +698,6 @@ export class ActivityRoutesService {
         );
       }
     }
-
     return builder;
   }
 

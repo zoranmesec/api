@@ -223,6 +223,12 @@ export class CragsService {
         });
     }
 
+    if (params.name != null) {
+      builder.andWhere('c.name ILIKE :name', {
+        name: `%${params.name}%`,
+      });
+    }
+
     if (params.peakId != null) {
       builder.andWhere('c.peak = :peakId', {
         peakId: params.peakId,

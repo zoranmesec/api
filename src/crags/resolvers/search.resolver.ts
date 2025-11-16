@@ -8,6 +8,7 @@ import { DataLoaderInterceptor } from '../../core/interceptors/data-loader.inter
 import { User } from '../../users/entities/user.entity';
 import { SearchService } from '../services/search.service';
 import { SearchResults } from '../utils/search-results.class';
+import { SearchInput } from '../dtos/search.input';
 
 @Resolver(() => SearchResults)
 @UseInterceptors(DataLoaderInterceptor)
@@ -21,6 +22,17 @@ export class SearchResolver {
     @CurrentUser() user: User,
     @Info() gqlInfo: GraphQLResolveInfo,
     @Args('input', { nullable: true }) input?: string,
+  ): Promise<SearchResults> {
+    return this.searchService.find({ searchString: input }, user, gqlInfo);
+  }
+
+  @Query(() => SearchResults)
+  @AllowAny()
+  @UseGuards(UserAuthGuard)
+  searchByInput(
+    @CurrentUser() user: User,
+    @Info() gqlInfo: GraphQLResolveInfo,
+    @Args('input', { nullable: true }) input?: SearchInput,
   ): Promise<SearchResults> {
     return this.searchService.find(input, user, gqlInfo);
   }

@@ -8,6 +8,7 @@ import { Comment } from '../entities/comment.entity';
 import { User } from '../../users/entities/user.entity';
 import { SearchResults } from '../utils/search-results.class';
 import { FieldNode, GraphQLResolveInfo } from 'graphql';
+import { SearchInput } from '../dtos/search.input';
 
 @Injectable()
 export class SearchService {
@@ -25,10 +26,11 @@ export class SearchService {
   ) {}
 
   async find(
-    searchString: string,
+    searchInput: SearchInput,
     user: User,
     gqlInfo: GraphQLResolveInfo,
   ): Promise<SearchResults> {
+    const searchString = searchInput.searchString;
     // get the fields that were requested by the graphql query
     const selectedFields = gqlInfo.fieldNodes[0].selectionSet.selections.map(
       (item: FieldNode) => item.name.value,
@@ -44,7 +46,14 @@ export class SearchService {
       : result;
 
     result = selectedFields.includes('routes')
-      ? { ...result, routes: await this.findRoutes(searchString, showHidden) }
+      ? {
+          ...result,
+          routes: await this.findRoutes(
+            searchString,
+            showHidden,
+            searchInput.cragId,
+          ),
+        }
       : result;
 
     result = selectedFields.includes('sectors')
@@ -79,7 +88,11 @@ export class SearchService {
     return builder.getMany();
   }
 
-  findRoutes(searchString: string, showHidden: boolean): Promise<Route[]> {
+  findRoutes(
+    searchString: string,
+    showHidden: boolean,
+    cragId?: string,
+  ): Promise<Route[]> {
     const builder = this.routesRepository.createQueryBuilder('r');
 
     builder.innerJoin('crag', 'c', 'c.id = r.crag_id');
@@ -89,6 +102,10 @@ export class SearchService {
     }
 
     builder.andWhere("r.publish_status = 'published'");
+
+    if (cragId) {
+      builder.andWhere('r.crag_id = :cragId', { cragId });
+    }
 
     this.tokenizeQueryToBuilder(builder, searchString, 'r');
 

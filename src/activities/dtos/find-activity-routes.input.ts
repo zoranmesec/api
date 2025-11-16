@@ -56,4 +56,12 @@ export class FindActivityRoutesInput {
   @Field(() => String, { nullable: true })
   @IsOptional()
   clubId?: string;
+
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  minGrade?: number;
+
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  maxGrade?: number;
 }
