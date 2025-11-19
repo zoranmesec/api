@@ -1,5 +1,6 @@
 import {
   ForbiddenException,
+  Logger,
   UseFilters,
   UseGuards,
   UseInterceptors,
@@ -67,12 +68,12 @@ export class ActivitiesResolver {
     @CurrentUser() currentUser: User,
     @Args('input', { nullable: true }) input: FindActivitiesInput = {},
     @Info() info: GraphQLResolveInfo,
-  )  {
+  ) {
     info.cacheControl.setCacheHint({ scope: CacheScope.Private });
     input.userId = currentUser.id;
 
     return this.activitiesService.getStats(input, currentUser);
-  }  
+  }
 
   @UseGuards(UserAuthGuard)
   @Query(() => Activity)
@@ -116,6 +117,41 @@ export class ActivitiesResolver {
     //  - a subset of the above, based on the input params.
 
     return this.activitiesService.paginate(input, currentUser);
+  }
+
+  @UseGuards(UserAuthGuard)
+  @Query(() => [Activity])
+  myActivitiesByMonth(
+    @CurrentUser() currentUser: User,
+    @Args('month') month: number,
+    @Args('year') year: number,
+    @Info() info: GraphQLResolveInfo,
+  ): Promise<Activity[]> {
+    info.cacheControl.setCacheHint({ scope: CacheScope.Private });
+    // check values for month and year
+    if (month < 1 || month > 12) {
+      throw new ForbiddenException('Month must be between 1 and 12');
+    }
+    if (year < 1970 || year > 2100) {
+      throw new ForbiddenException('Year must be between 1970 and 2100');
+    }
+
+    // Calculate dateFrom for start of previous month and dateTo for end of next month
+    if (month === 1) {
+      year -= 1;
+      month = 12;
+    } else if (month === 12) {
+      year += 1;
+      month = 1;
+    }
+    const dateFrom = new Date(year, month - 1 - 1, 1, 0, 0, 0, 0);
+    const dateTo = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    const input: FindActivitiesInput = {
+      userId: currentUser.id,
+      dateFrom,
+      dateTo,
+    };
+    return this.activitiesService.find(input);
   }
 
   @Mutation(() => Activity)
