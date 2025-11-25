@@ -44,12 +44,14 @@ import { RoutesTouches } from '../utils/routes-touches.class';
 import { Connection } from 'typeorm';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
+import { ActivitiesService } from '../services/activities.service';
 
 @Resolver(() => ActivityRoute)
 @UseInterceptors(DataLoaderInterceptor)
 export class ActivityRoutesResolver {
   constructor(
     private activityRoutesService: ActivityRoutesService,
+    private activitiesService: ActivitiesService,
     private connection: Connection,
     @InjectQueue('summary') private summaryQueue: Queue,
   ) {}
@@ -169,23 +171,24 @@ export class ActivityRoutesResolver {
     }
   }
 
-  @Mutation(() => ActivityRoute)
+  @Mutation(() => [ActivityRoute])
   @UseInterceptors(AuditInterceptor)
   @UseGuards(UserAuthGuard)
   async updateActivityRoute(
     @CurrentUser() user: User,
-    @Args('input', { type: () => UpdateActivityRouteInput })
-    input: UpdateActivityRouteInput,
-  ): Promise<ActivityRoute> {
-    const activityRoute = await this.activityRoutesService.findOneById(
-      input.id,
-    );
-
-    if (activityRoute.userId != user.id) {
+    @Args('routes', { type: () => [UpdateActivityRouteInput] })
+    routes: [UpdateActivityRouteInput],
+    @Args('activityId') activityId: string,
+  ): Promise<ActivityRoute[]> {
+    try {
+      const activity = await this.activitiesService.findOneById(
+        activityId,
+        user,
+      );
+      return this.activityRoutesService.updateBatch(user, routes, activity);
+    } catch (error) {
       throw new ForbiddenException();
     }
-
-    return this.activityRoutesService.update(input);
   }
 
   @Mutation((returns) => Boolean)

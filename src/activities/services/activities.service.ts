@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PaginationMeta } from '../../core/utils/pagination-meta.class';
 import { Crag } from '../../crags/entities/crag.entity';
@@ -18,6 +18,7 @@ import { getPublishStatusParams } from '../../core/utils/contributable-helpers';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { StatsActivities } from '../utils/stats-activities.class';
+import { UpdateActivityRouteInput } from '../dtos/update-activity-route.input';
 
 @Injectable()
 export class ActivitiesService {
@@ -109,7 +110,7 @@ export class ActivitiesService {
   async updateActivityWithRoutes(
     activityIn: UpdateActivityInput,
     user: User,
-    routesIn: CreateActivityRouteInput[],
+    routesIn: UpdateActivityRouteInput[],
     dryRun = false,
     sideEffects = [],
   ): Promise<Activity> {
@@ -134,13 +135,23 @@ export class ActivitiesService {
         id: activityIn.id,
       });
       this.activitiesRepository.merge(activity, activityIn);
-
       activity.user = Promise.resolve(user);
+      const deletedRoutes: ActivityRoute[] = [];
+      // Loop through existing activity routes and find those that are not in the update input - delete them
+      const existingActivityRoutes = await activity.routes;
+      for (const existingActivityRoute of existingActivityRoutes) {
+        if (!routesIn.find((rIn) => rIn.id === existingActivityRoute.id)) {
+          deletedRoutes.push(existingActivityRoute);
+        }
+      }
+
+      for (const deletedRoute of deletedRoutes) {
+        await this.activityRoutesService.delete(deletedRoute, queryRunner);
+      }
 
       await queryRunner.manager.save(activity);
-
       for (const routeIn of routesIn) {
-        await this.activityRoutesService.create(
+        await this.activityRoutesService.update(
           queryRunner,
           routeIn,
           user,
@@ -248,8 +259,11 @@ export class ActivitiesService {
     return myStats;
   }
 
-  async find(params: FindActivitiesInput = {}): Promise<Activity[]> {
-    return (await this.buildQuery(params)).getMany();
+  async find(
+    params: FindActivitiesInput = {},
+    currentUser: User = null,
+  ): Promise<Activity[]> {
+    return (await this.buildQuery(params, currentUser)).getMany();
   }
 
   async findByIds(ids: string[], currentUser: User): Promise<Activity[]> {
@@ -380,7 +394,6 @@ export class ActivitiesService {
         publish: params.hasRoutesWithPublish,
       });
     }
-
     return builder;
   }
 

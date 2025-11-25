@@ -1,6 +1,11 @@
 import { InputType, Field } from '@nestjs/graphql';
 import { IsOptional } from 'class-validator';
-import { CragType } from '../entities/crag.entity';
+import {
+  CragType,
+  Orientation,
+  Season,
+  WallAngle,
+} from '../entities/crag.entity';
 import { PublishStatus } from '../entities/enums/publish-status.enum';
 
 @InputType()
@@ -39,10 +44,22 @@ export class CreateCragInput {
   @IsOptional()
   access: string;
 
-  @Field({ nullable: true })
+  @Field(() => [Orientation], { nullable: true })
   @IsOptional()
-  orientation: string;
+  orientations?: Orientation[];
+
+  @Field(() => [Season], { nullable: true })
+  @IsOptional()
+  seasons?: Season[];
 
   @Field()
   defaultGradingSystemId: string;
+
+  @Field(() => [WallAngle], { nullable: true })
+  @IsOptional()
+  wallAngles?: WallAngle[];
+
+  @Field({ nullable: true })
+  @IsOptional()
+  rainproof?: boolean;
 }

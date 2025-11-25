@@ -294,7 +294,7 @@ export class ActivityRoutesService {
   }
 
   /**
-   * For an array of route ids check which of the routes has a user already tried, ticked or ticked on toprope before (or on) a given date
+   * For an array of route ids check which of the routes has a user already tried, ticked or ticked on toprope before (or on) a given date, excluding given activityId if passed
    * (Pass in a queryRunner instance if you are inside a transaction)
    */
   async getTouchesForRoutes(
@@ -310,8 +310,7 @@ export class ActivityRoutesService {
     // This will be done in 3 queries for better readability (also :D)
     // might optimize to do it in a single query if needed later
 
-    // Which of the passed routes have been ticked before (or on) the passed date?
-    const ticked = await qb
+    const builderQuery = qb
       .addSelect('route_id') // need to add column to get the correct distinct
       .distinctOn(['ar.route_id'])
       .orderBy('ar.route_id')
@@ -321,11 +320,24 @@ export class ActivityRoutesService {
       .andWhere('ar.ascent_type in (:...tickTypes)', {
         tickTypes: [...tickAscentTypes],
       })
-      .andWhere('ar.date <= :before', { before: input.before })
-      .getMany();
+      .andWhere('ar.date <= :before', { before: input.before });
 
-    // Which of the passed routes have been ticked on top rope before (or on) the passed date?
-    const trTicked = await qb
+    if (input.activityId && input.activityId.length > 0) {
+      builderQuery.andWhere('ar.activity_id NOT IN (:activityId)', {
+        activityId: input.activityId,
+      });
+    }
+
+    // this.logger.debug(
+    //   `getTouchesForRoutes query: ${builderQuery.getSql()}, input: ${JSON.stringify(
+    //     input,
+    //   )}, userId: ${userId}`,
+    // );
+
+    // Which of the passed routes have been ticked before (or on) the passed date?
+    const ticked = await builderQuery.getMany();
+
+    const tickedQuery = qb
       .addSelect('route_id') // need to add column to get the correct distinct
       .distinctOn(['ar.route_id'])
       .orderBy('ar.route_id')
@@ -335,19 +347,32 @@ export class ActivityRoutesService {
       .andWhere('ar.ascent_type in (:...trTickTypes)', {
         trTickTypes: [...trTickAscentTypes],
       })
-      .andWhere('ar.date <= :before', { before: input.before })
-      .getMany();
+      .andWhere('ar.date <= :before', { before: input.before });
+    if (input.activityId && input.activityId.length > 0) {
+      tickedQuery.andWhere('ar.activity_id NOT IN (:activityId)', {
+        activityId: input.activityId,
+      });
+    }
+    // Which of the passed routes have been ticked on top rope before (or on) the passed date?
+    const trTicked = await tickedQuery.getMany();
 
-    // Which of the passed routes have been tried before (or on) the passed date?
-    const tried = await qb
+    const triedQuery = qb
       .addSelect('route_id') // need to add column to get the correct distinct
       .distinctOn(['ar.route_id'])
       .orderBy('ar.route_id')
       .addOrderBy('ar.ascent_type')
       .where('ar.user_id = :userId', { userId })
       .andWhere('ar.route_id in (:...routeIds)', { routeIds: input.routeIds })
-      .andWhere('ar.date <= :before', { before: input.before })
-      .getMany();
+      .andWhere('ar.date <= :before', { before: input.before });
+
+    if (input.activityId && input.activityId.length > 0) {
+      triedQuery.andWhere('ar.activity_id NOT IN (:activityId)', {
+        activityId: input.activityId,
+      });
+    }
+
+    // Which of the passed routes have been tried before (or on) the passed date?
+    const tried = await triedQuery.getMany();
 
     return {
       ticked,
@@ -717,14 +742,186 @@ export class ActivityRoutesService {
     return this.activityRoutesRepository.findOneByOrFail({ id });
   }
 
-  async update(data: UpdateActivityRouteInput): Promise<ActivityRoute> {
+  async updateBatch(
+    user: User,
+    routesIn: UpdateActivityRouteInput[],
+    activity?: Activity,
+  ): Promise<ActivityRoute[]> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    const updatedActivityRoutes: ActivityRoute[] = [];
+
+    try {
+      // Create activity-route for each route. Process them in sequential order because one can log a single route more than once in a single post, and should take that into account when validating the logs
+      for (const routeIn of routesIn) {
+        updatedActivityRoutes.push(
+          await this.update(queryRunner, routeIn, user, activity),
+        );
+      }
+
+      await queryRunner.commitTransaction();
+      return updatedActivityRoutes;
+    } catch (exception) {
+      await queryRunner.rollbackTransaction();
+      throw exception;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async update(
+    queryRunner: QueryRunner,
+    routeIn: UpdateActivityRouteInput,
+    user: User,
+    activity?: Activity,
+    sideEffects: SideEffect[] = [],
+  ): Promise<ActivityRoute> {
     const activityRoute = await this.activityRoutesRepository.findOneByOrFail({
-      id: data.id,
+      id: routeIn.id,
     });
 
-    this.activityRoutesRepository.merge(activityRoute, data);
+    this.activityRoutesRepository.merge(activityRoute, routeIn);
 
-    return this.activityRoutesRepository.save(activityRoute);
+    activityRoute.user = Promise.resolve(user);
+
+    let route = await queryRunner.manager.findOneByOrFail(Route, {
+      id: routeIn.routeId,
+    });
+
+    const routeTouched = await this.getTouchesForRoutes(
+      new FindRoutesTouchesInput(
+        [routeIn.routeId],
+        routeIn.date,
+        activityRoute.activityId,
+      ),
+      user.id,
+      queryRunner,
+    );
+    const logPossible = this.logPossible(
+      routeTouched.ticked.some((ar) => ar.routeId === routeIn.routeId),
+      routeTouched.tried.some((ar) => ar.routeId === routeIn.routeId),
+      routeTouched.trTicked.some((ar) => ar.routeId === routeIn.routeId),
+      routeIn.ascentType,
+      route.routeTypeId,
+    );
+    if (!logPossible) {
+      throw new HttpException('Impossible log', HttpStatus.NOT_ACCEPTABLE);
+    }
+
+    // If after the date of this log more logs of the same route exist, their ascent types might need to be changed (eg. redpoint -> repeat etc.)
+    const args: [string, string, Date, QueryRunner, SideEffect[]] = [
+      routeIn.routeId,
+      user.id,
+      activity.date,
+      queryRunner,
+      sideEffects,
+    ];
+    if (isTick(routeIn.ascentType)) {
+      await convertFirstTickAfterToRepeat(...args);
+      await convertFirstTrTickAfterToTrRepeat(...args);
+      await convertFirstTrSightOrFlashAfterToTrRedpoint(...args);
+    } else if (isTrTick(routeIn.ascentType)) {
+      await convertFirstSightOrFlashAfterToRedpoint(...args);
+      await convertFirstTrTickAfterToTrRepeat(...args);
+    } else {
+      // it is only a try
+      // there can really only be one of the below, so one of theese will do nothing. and also could do it in a single query, but leave as is for readability reasons
+      await convertFirstSightOrFlashAfterToRedpoint(...args);
+      await convertFirstTrSightOrFlashAfterToTrRedpoint(...args);
+    }
+
+    activityRoute.route = Promise.resolve(route);
+    if (
+      route.isProject &&
+      isTick(routeIn.ascentType) &&
+      !routeIn.votedDifficulty
+    ) {
+      throw new HttpException(
+        'If ticking a project difficulty vote is required.',
+        HttpStatus.NOT_ACCEPTABLE,
+      );
+    }
+    // if a vote on difficulty is passed add a new difficulty vote or update existing
+    if (routeIn.votedDifficulty) {
+      // but first check if a user even can vote (can vote only if the log is a tick)
+      if (!isTick(routeIn.ascentType)) {
+        throw new HttpException(
+          'Cannot vote on difficulty if not logging a tick.',
+          HttpStatus.NOT_ACCEPTABLE,
+        );
+      }
+
+      let difficultyVote = await queryRunner.manager.findOneBy(DifficultyVote, {
+        userId: user.id,
+        routeId: route.id,
+      });
+      if (!difficultyVote) {
+        difficultyVote = new DifficultyVote();
+        difficultyVote.route = Promise.resolve(route);
+        difficultyVote.user = Promise.resolve(user);
+      }
+      difficultyVote.difficulty = routeIn.votedDifficulty;
+
+      // if a route that is being ticked is/was a project, then the first vote is a base vote, and the route ceases to be a project
+      if (route.isProject) {
+        difficultyVote.isBase = true;
+        route.isProject = false;
+        await queryRunner.manager.save(route);
+      }
+
+      await queryRunner.manager.save(difficultyVote);
+    }
+    // recalculate all orderScore and rankingScore fields for all other activity routes of this route
+    await recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
+    // await this.recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
+    // TODO: above recalculation should be placed into queue rather than done synchronously here
+
+    // TODO: after above recalc is moved into q this will not be neccessary because recalc will happen after this transaction (and will include this ar)
+    // but for now we need refetch the route of the current activity route because the trigger might have changed the difficulty
+    route = await queryRunner.manager.findOneBy(Route, {
+      id: routeIn.routeId,
+    });
+
+    activityRoute.orderScore = calculateScore(
+      route.difficulty,
+      activityRoute.ascentType,
+      'order',
+    );
+    activityRoute.rankingScore = calculateScore(
+      route.difficulty,
+      activityRoute.ascentType,
+      'ranking',
+    );
+
+    // if a vote on star rating (route beauty) is passed add a new star rating vote or update existing one
+    if (routeIn.votedStarRating || routeIn.votedStarRating === 0) {
+      let starRatingVote = await queryRunner.manager.findOneBy(StarRatingVote, {
+        userId: user.id,
+        routeId: route.id,
+      });
+
+      if (!starRatingVote) {
+        starRatingVote = new StarRatingVote();
+        starRatingVote.route = Promise.resolve(route);
+        starRatingVote.user = Promise.resolve(user);
+      }
+      starRatingVote.stars = routeIn.votedStarRating;
+
+      await queryRunner.manager.save(starRatingVote);
+
+      // Recalculate the average star rating for the route and count the number of star ratings for the route and save it to the route table
+      await this.recalculateStarRating(route, queryRunner);
+    }
+    try {
+      return this.activityRoutesRepository.save({
+        ...activityRoute,
+        id: activityRoute.id,
+      });
+    } catch (error) {
+      throw error;
+    }
   }
 
   async delete(

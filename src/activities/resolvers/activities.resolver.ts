@@ -40,6 +40,7 @@ import {
 import { UserLoader } from '../../users/loaders/user.loader';
 import DataLoader from 'dataloader';
 import { StatsActivities } from '../utils/stats-activities.class';
+import { UpdateActivityRouteInput } from '../dtos/update-activity-route.input';
 
 @Resolver(() => Activity)
 @UseInterceptors(DataLoaderInterceptor)
@@ -151,7 +152,7 @@ export class ActivitiesResolver {
       dateFrom,
       dateTo,
     };
-    return this.activitiesService.find(input);
+    return this.activitiesService.find(input, currentUser);
   }
 
   @Mutation(() => Activity)
@@ -207,8 +208,8 @@ export class ActivitiesResolver {
     @CurrentUser() currentUser: User,
     @Args('input', { type: () => UpdateActivityInput })
     activityIn: UpdateActivityInput,
-    @Args('routes', { type: () => [CreateActivityRouteInput] })
-    routesIn: CreateActivityRouteInput[],
+    @Args('routes', { type: () => [UpdateActivityRouteInput] })
+    routesIn: UpdateActivityRouteInput[],
   ): Promise<SideEffect[]> {
     const activity = await this.activitiesService.findOneById(
       activityIn.id,
@@ -240,8 +241,8 @@ export class ActivitiesResolver {
     @CurrentUser() currentUser: User,
     @Args('input', { type: () => UpdateActivityInput })
     activityIn: UpdateActivityInput,
-    @Args('routes', { type: () => [CreateActivityRouteInput] })
-    routesIn: CreateActivityRouteInput[],
+    @Args('routes', { type: () => [UpdateActivityRouteInput] })
+    routesIn: UpdateActivityRouteInput[],
   ): Promise<Activity> {
     const activity = await this.activitiesService.findOneById(
       activityIn.id,
