@@ -76,6 +76,7 @@ export class ActivitiesService {
           user,
           activity,
           sideEffects,
+          dryRun
         );
       }
 
@@ -157,6 +158,7 @@ export class ActivitiesService {
           user,
           activity,
           sideEffects,
+          dryRun
         );
       }
 

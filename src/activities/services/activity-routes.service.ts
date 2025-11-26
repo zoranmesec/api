@@ -92,6 +92,7 @@ export class ActivityRoutesService {
     user: User,
     activity?: Activity,
     sideEffects: SideEffect[] = [],
+    dryRun = false
   ): Promise<ActivityRoute> {
     const activityRoute = new ActivityRoute();
     queryRunner.manager.merge(ActivityRoute, activityRoute, routeIn);
@@ -154,7 +155,7 @@ export class ActivityRoutesService {
     }
 
     // if a vote on difficulty is passed add a new difficulty vote or update existing
-    if (routeIn.votedDifficulty) {
+    if (routeIn.votedDifficulty && !dryRun) {
       // but first check if a user even can vote (can vote only if the log is a tick)
       if (!isTick(routeIn.ascentType)) {
         throw new HttpException(
@@ -184,29 +185,31 @@ export class ActivityRoutesService {
       await queryRunner.manager.save(difficultyVote);
     }
 
-    // recalculate all orderScore and rankingScore fields for all other activity routes of this route
-    await recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
-    // await this.recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
-    // TODO: above recalculation should be placed into queue rather than done synchronously here
-
-    // TODO: after above recalc is moved into q this will not be neccessary because recalc will happen after this transaction (and will include this ar)
-    // but for now we need refetch the route of the current activity route because the trigger might have changed the difficulty
-    route = await queryRunner.manager.findOneBy(Route, {
+    if (!dryRun) {
+      // recalculate all orderScore and rankingScore fields for all other activity routes of this route
+      await recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
+      // await this.recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
+      // TODO: above recalculation should be placed into queue rather than done synchronously here
+      
+      // TODO: after above recalc is moved into q this will not be neccessary because recalc will happen after this transaction (and will include this ar)
+      // but for now we need refetch the route of the current activity route because the trigger might have changed the difficulty
+      route = await queryRunner.manager.findOneBy(Route, {
       id: routeIn.routeId,
-    });
-    activityRoute.orderScore = calculateScore(
-      route.difficulty,
-      activityRoute.ascentType,
-      'order',
-    );
-    activityRoute.rankingScore = calculateScore(
-      route.difficulty,
-      activityRoute.ascentType,
-      'ranking',
-    );
+      });
+      activityRoute.orderScore = calculateScore(
+        route.difficulty,
+        activityRoute.ascentType,
+        'order',
+      );
+      activityRoute.rankingScore = calculateScore(
+        route.difficulty,
+        activityRoute.ascentType,
+        'ranking',
+      );
+    }
 
     // if a vote on star rating (route beauty) is passed add a new star rating vote or update existing one
-    if (routeIn.votedStarRating || routeIn.votedStarRating === 0) {
+    if (!dryRun && (routeIn.votedStarRating || routeIn.votedStarRating === 0)) {
       let starRatingVote = await queryRunner.manager.findOneBy(StarRatingVote, {
         userId: user.id,
         routeId: route.id,
@@ -777,6 +780,7 @@ export class ActivityRoutesService {
     user: User,
     activity?: Activity,
     sideEffects: SideEffect[] = [],
+    dryRun: boolean = false,
   ): Promise<ActivityRoute> {
     const activityRoute = await this.activityRoutesRepository.findOneByOrFail({
       id: routeIn.id,
@@ -844,7 +848,7 @@ export class ActivityRoutesService {
       );
     }
     // if a vote on difficulty is passed add a new difficulty vote or update existing
-    if (routeIn.votedDifficulty) {
+    if (routeIn.votedDifficulty && !dryRun) {
       // but first check if a user even can vote (can vote only if the log is a tick)
       if (!isTick(routeIn.ascentType)) {
         throw new HttpException(
@@ -873,30 +877,32 @@ export class ActivityRoutesService {
 
       await queryRunner.manager.save(difficultyVote);
     }
-    // recalculate all orderScore and rankingScore fields for all other activity routes of this route
-    await recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
-    // await this.recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
-    // TODO: above recalculation should be placed into queue rather than done synchronously here
+    if(!dryRun) {
+      // recalculate all orderScore and rankingScore fields for all other activity routes of this route
+      await recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
+      // await this.recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
+      // TODO: above recalculation should be placed into queue rather than done synchronously here
+      
+      // TODO: after above recalc is moved into q this will not be neccessary because recalc will happen after this transaction (and will include this ar)
+      // but for now we need refetch the route of the current activity route because the trigger might have changed the difficulty
+      route = await queryRunner.manager.findOneBy(Route, {
+        id: routeIn.routeId,
+      });
 
-    // TODO: after above recalc is moved into q this will not be neccessary because recalc will happen after this transaction (and will include this ar)
-    // but for now we need refetch the route of the current activity route because the trigger might have changed the difficulty
-    route = await queryRunner.manager.findOneBy(Route, {
-      id: routeIn.routeId,
-    });
-
-    activityRoute.orderScore = calculateScore(
-      route.difficulty,
-      activityRoute.ascentType,
-      'order',
-    );
-    activityRoute.rankingScore = calculateScore(
-      route.difficulty,
-      activityRoute.ascentType,
-      'ranking',
-    );
+      activityRoute.orderScore = calculateScore(
+        route.difficulty,
+        activityRoute.ascentType,
+        'order',
+      );
+      activityRoute.rankingScore = calculateScore(
+        route.difficulty,
+        activityRoute.ascentType,
+        'ranking',
+      );
+    }
 
     // if a vote on star rating (route beauty) is passed add a new star rating vote or update existing one
-    if (routeIn.votedStarRating || routeIn.votedStarRating === 0) {
+    if (!dryRun && (routeIn.votedStarRating || routeIn.votedStarRating === 0)) {
       let starRatingVote = await queryRunner.manager.findOneBy(StarRatingVote, {
         userId: user.id,
         routeId: route.id,
