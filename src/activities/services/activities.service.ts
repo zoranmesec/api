@@ -22,6 +22,7 @@ import { UpdateActivityRouteInput } from '../dtos/update-activity-route.input';
 
 @Injectable()
 export class ActivitiesService {
+
   constructor(
     @InjectRepository(Activity)
     private activitiesRepository: Repository<Activity>,
@@ -53,6 +54,7 @@ export class ActivitiesService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+
     try {
       // Create new activity
       const activity = new Activity();
@@ -68,6 +70,7 @@ export class ActivitiesService {
       }
       await queryRunner.manager.save(activity);
 
+ 
       // Create activity-route for each route belonging to this activity. Process them in sequential order because one can log a single route more than once in a single post, and should take that into account when validating the logs
       for (const routeIn of routesIn) {
         await this.activityRoutesService.create(
@@ -80,10 +83,12 @@ export class ActivitiesService {
         );
       }
 
+
       if (dryRun) {
         await queryRunner.rollbackTransaction();
         return Promise.resolve(null);
       } else {
+
         await queryRunner.commitTransaction();
 
         routesIn
@@ -118,6 +123,7 @@ export class ActivitiesService {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
+
     if (activityIn.date.getTime() > today.getTime()) {
       throw new HttpException(
         'Invalid date: cannot log into the future.',
@@ -128,6 +134,7 @@ export class ActivitiesService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+
 
     try {
       // TODO: refactor as it breaks DRY heavily, make sure that date did not change, update AR dates from activity date
@@ -151,8 +158,9 @@ export class ActivitiesService {
       }
 
       await queryRunner.manager.save(activity);
+
       for (const routeIn of routesIn) {
-        await this.activityRoutesService.update(
+        const updatedRoute = await this.activityRoutesService.update(
           queryRunner,
           routeIn,
           user,
@@ -160,7 +168,9 @@ export class ActivitiesService {
           sideEffects,
           dryRun
         );
+ 
       }
+
 
       if (dryRun) {
         await queryRunner.rollbackTransaction();

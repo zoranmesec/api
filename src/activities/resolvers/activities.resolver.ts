@@ -45,6 +45,7 @@ import { UpdateActivityRouteInput } from '../dtos/update-activity-route.input';
 @Resolver(() => Activity)
 @UseInterceptors(DataLoaderInterceptor)
 export class ActivitiesResolver {
+  private readonly logger = new Logger(ActivitiesResolver.name);
   constructor(
     private activitiesService: ActivitiesService,
     private activityRoutesService: ActivityRoutesService,
@@ -229,6 +230,8 @@ export class ActivitiesResolver {
         true,
         sideEffects,
       );
+      this.logger.log(`Dry run update activity with id ${activityIn.id} for user ${currentUser.id}`);
+      this.logger.debug(`Side effects: ${JSON.stringify(sideEffects)}`);
       return sideEffects;
     } catch (exception) {
       throw exception;
@@ -254,12 +257,14 @@ export class ActivitiesResolver {
     }
 
     try {
+      this.logger.log(`Update activity with id ${activityIn.id} for user ${currentUser.id}`);
       return this.activitiesService.updateActivityWithRoutes(
         activityIn,
         currentUser,
         routesIn,
       );
     } catch (exception) {
+      this.logger.error(`Error updating activity with id ${activityIn.id} for user ${currentUser.id}: ${exception.message}`);
       throw exception;
     }
   }

@@ -1,37 +1,20 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { PaginationMeta } from '../../core/utils/pagination-meta.class';
-import { Route } from '../../crags/entities/route.entity';
-import {
-  ClubMember,
-  ClubMemberStatus,
-} from '../../users/entities/club-member.entity';
-import { Club } from '../../users/entities/club.entity';
-import { User } from '../../users/entities/user.entity';
 import {
   DataSource,
   QueryRunner,
   Repository,
   SelectQueryBuilder,
 } from 'typeorm';
-import { CreateActivityRouteInput } from '../dtos/create-activity-route.input';
-import { FindActivityRoutesInput } from '../dtos/find-activity-routes.input';
-import {
-  ActivityRoute,
-  AscentType,
-  tickAscentTypes,
-  firstTickAscentTypes,
-  trTickAscentTypes,
-} from '../entities/activity-route.entity';
-import { Activity } from '../entities/activity.entity';
-import { PaginatedActivityRoutes } from '../utils/paginated-activity-routes.class';
-import { DifficultyVote } from '../../crags/entities/difficulty-vote.entity';
-import { StarRatingVote } from '../../crags/entities/star-rating-vote.entity';
-import { UpdateActivityRouteInput } from '../dtos/update-activity-route.input';
-import { RoutesTouches } from '../utils/routes-touches.class';
-import { FindRoutesTouchesInput } from '../dtos/find-routes-touches.input';
-import { SideEffect } from '../utils/side-effect.class';
 import { setBuilderCache } from '../../core/utils/entity-cache/entity-cache-helpers';
+import { PaginationMeta } from '../../core/utils/pagination-meta.class';
+import { DifficultyVote } from '../../crags/entities/difficulty-vote.entity';
+import { Route } from '../../crags/entities/route.entity';
+import { StarRatingVote } from '../../crags/entities/star-rating-vote.entity';
+import {
+  calculateScore,
+  recalculateActivityRoutesScores,
+} from '../../crags/utils/calculate-scores';
 import {
   convertFirstSightOrFlashAfterToRedpoint,
   convertFirstTickAfterToRepeat,
@@ -41,13 +24,31 @@ import {
   isTrTick,
 } from '../../crags/utils/convert-ascents';
 import {
-  calculateScore,
-  recalculateActivityRoutesScores,
-} from '../../crags/utils/calculate-scores';
+  ClubMember,
+  ClubMemberStatus,
+} from '../../users/entities/club-member.entity';
+import { Club } from '../../users/entities/club.entity';
+import { User } from '../../users/entities/user.entity';
+import { CreateActivityRouteInput } from '../dtos/create-activity-route.input';
+import { FindActivityRoutesInput } from '../dtos/find-activity-routes.input';
+import { FindRoutesTouchesInput } from '../dtos/find-routes-touches.input';
+import { UpdateActivityRouteInput } from '../dtos/update-activity-route.input';
+import {
+  ActivityRoute,
+  AscentType,
+  firstTickAscentTypes,
+  tickAscentTypes,
+  trTickAscentTypes,
+} from '../entities/activity-route.entity';
+import { Activity } from '../entities/activity.entity';
+import { PaginatedActivityRoutes } from '../utils/paginated-activity-routes.class';
+import { RoutesTouches } from '../utils/routes-touches.class';
+import { SideEffect } from '../utils/side-effect.class';
 import { StatsRoutes } from '../utils/stats-routes.class';
 
 @Injectable()
 export class ActivityRoutesService {
+
   constructor(
     private dataSource: DataSource,
     @InjectRepository(ActivityRoute)
@@ -92,7 +93,7 @@ export class ActivityRoutesService {
     user: User,
     activity?: Activity,
     sideEffects: SideEffect[] = [],
-    dryRun = false
+    dryRun = false,
   ): Promise<ActivityRoute> {
     const activityRoute = new ActivityRoute();
     queryRunner.manager.merge(ActivityRoute, activityRoute, routeIn);
@@ -190,11 +191,11 @@ export class ActivityRoutesService {
       await recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
       // await this.recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
       // TODO: above recalculation should be placed into queue rather than done synchronously here
-      
+
       // TODO: after above recalc is moved into q this will not be neccessary because recalc will happen after this transaction (and will include this ar)
       // but for now we need refetch the route of the current activity route because the trigger might have changed the difficulty
       route = await queryRunner.manager.findOneBy(Route, {
-      id: routeIn.routeId,
+        id: routeIn.routeId,
       });
       activityRoute.orderScore = calculateScore(
         route.difficulty,
@@ -206,6 +207,9 @@ export class ActivityRoutesService {
         activityRoute.ascentType,
         'ranking',
       );
+    } else {
+      activityRoute.orderScore = 0;
+      activityRoute.rankingScore = 0;
     }
 
     // if a vote on star rating (route beauty) is passed add a new star rating vote or update existing one
@@ -782,17 +786,20 @@ export class ActivityRoutesService {
     sideEffects: SideEffect[] = [],
     dryRun: boolean = false,
   ): Promise<ActivityRoute> {
-    const activityRoute = await this.activityRoutesRepository.findOneByOrFail({
+    const activityRoute = await queryRunner.manager.findOneByOrFail(ActivityRoute, {
       id: routeIn.id,
     });
 
-    this.activityRoutesRepository.merge(activityRoute, routeIn);
+    queryRunner.manager.merge(ActivityRoute, activityRoute, routeIn);
+    // this.activityRoutesRepository.merge(activityRoute, routeIn);
 
     activityRoute.user = Promise.resolve(user);
 
     let route = await queryRunner.manager.findOneByOrFail(Route, {
       id: routeIn.routeId,
     });
+
+
 
     const routeTouched = await this.getTouchesForRoutes(
       new FindRoutesTouchesInput(
@@ -810,6 +817,7 @@ export class ActivityRoutesService {
       routeIn.ascentType,
       route.routeTypeId,
     );
+
     if (!logPossible) {
       throw new HttpException('Impossible log', HttpStatus.NOT_ACCEPTABLE);
     }
@@ -822,6 +830,7 @@ export class ActivityRoutesService {
       queryRunner,
       sideEffects,
     ];
+
     if (isTick(routeIn.ascentType)) {
       await convertFirstTickAfterToRepeat(...args);
       await convertFirstTrTickAfterToTrRepeat(...args);
@@ -836,7 +845,9 @@ export class ActivityRoutesService {
       await convertFirstTrSightOrFlashAfterToTrRedpoint(...args);
     }
 
+    
     activityRoute.route = Promise.resolve(route);
+    
     if (
       route.isProject &&
       isTick(routeIn.ascentType) &&
@@ -877,12 +888,12 @@ export class ActivityRoutesService {
 
       await queryRunner.manager.save(difficultyVote);
     }
-    if(!dryRun) {
+    if (!dryRun) {
       // recalculate all orderScore and rankingScore fields for all other activity routes of this route
       await recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
       // await this.recalculateActivityRoutesScores(routeIn.routeId, queryRunner);
       // TODO: above recalculation should be placed into queue rather than done synchronously here
-      
+
       // TODO: after above recalc is moved into q this will not be neccessary because recalc will happen after this transaction (and will include this ar)
       // but for now we need refetch the route of the current activity route because the trigger might have changed the difficulty
       route = await queryRunner.manager.findOneBy(Route, {
@@ -899,6 +910,9 @@ export class ActivityRoutesService {
         activityRoute.ascentType,
         'ranking',
       );
+    } else {
+      activityRoute.orderScore = 0;
+      activityRoute.rankingScore = 0;
     }
 
     // if a vote on star rating (route beauty) is passed add a new star rating vote or update existing one
@@ -920,14 +934,8 @@ export class ActivityRoutesService {
       // Recalculate the average star rating for the route and count the number of star ratings for the route and save it to the route table
       await this.recalculateStarRating(route, queryRunner);
     }
-    try {
-      return this.activityRoutesRepository.save({
-        ...activityRoute,
-        id: activityRoute.id,
-      });
-    } catch (error) {
-      throw error;
-    }
+    return queryRunner.manager.save(activityRoute);
+
   }
 
   async delete(

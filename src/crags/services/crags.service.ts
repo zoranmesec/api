@@ -272,8 +272,14 @@ export class CragsService {
     }
 
     if (params.orientations != null && params.orientations.length > 0) {
-      builder.andWhere('c.orientation in (:...orientations)', {
-        orientations: params.orientations,
+      
+      params.orientations.forEach((orientation, index) => {
+        builder.andWhere(
+          `:orientation = any (c.orientations)`,
+          {
+            orientation: orientation,
+          },
+        );
       });
     }
 
