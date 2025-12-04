@@ -33,6 +33,8 @@ export class CragsService {
     protected cragsRepository: Repository<Crag>,
     @InjectRepository(Country)
     private countryRepository: Repository<Country>,
+    @InjectRepository(Sector)
+    private sectorsRepository: Repository<Sector>,
     @InjectQueue('summary') private summaryQueue: Queue,
     private dataSource: DataSource,
   ) {}
@@ -102,6 +104,16 @@ export class CragsService {
     crag.slug = await this.generateCragSlug(data.name);
 
     await this.save(crag, user);
+
+    // Create default sector
+    const sector = new Sector();
+    sector.name = '';
+    sector.label = '';
+    sector.position = 0;
+    sector.publishStatus = crag.publishStatus;
+    sector.crag = Promise.resolve(crag);
+    sector.user = Promise.resolve(user);
+    await this.sectorsRepository.save(sector);
 
     return Promise.resolve(crag);
   }
@@ -272,14 +284,10 @@ export class CragsService {
     }
 
     if (params.orientations != null && params.orientations.length > 0) {
-      
       params.orientations.forEach((orientation, index) => {
-        builder.andWhere(
-          `:orientation = any (c.orientations)`,
-          {
-            orientation: orientation,
-          },
-        );
+        builder.andWhere(`:orientation = any (c.orientations)`, {
+          orientation: orientation,
+        });
       });
     }
 

@@ -62,4 +62,16 @@ export class CreateCragInput {
   @Field({ nullable: true })
   @IsOptional()
   rainproof?: boolean;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  approachTime?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  parkingLat: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  parkingLon: number;
 }

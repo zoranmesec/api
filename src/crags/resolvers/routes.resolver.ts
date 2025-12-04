@@ -145,7 +145,16 @@ export class RoutesResolver {
       input.publishStatus != null &&
       sector.publishStatus < input.publishStatus
     ) {
-      throw new BadRequestException('publish_status_incompatible_with_sector');
+      // Need to update sector as well
+      await this.sectorsService.update({
+        id: sector.id,
+        name: sector.name,
+        label: sector.label,
+        position: sector.position,
+        publishStatus: input.publishStatus,
+        cascadePublishStatus: null,
+        rejectionMessage: '',
+      });
     }
 
     if (route.publishStatus == 'in_review' && input.publishStatus == 'draft') {
@@ -189,6 +198,17 @@ export class RoutesResolver {
     }
 
     return this.routesService.delete(id);
+  }
+
+  @Mutation(() => [Boolean])
+  @Roles('admin')
+  @UseInterceptors(AuditInterceptor)
+  @UseFilters(NotFoundFilter)
+  async deleteRoutes(
+    @Args('input', { type: () => [String] })
+    input: string[],
+  ): Promise<Boolean[]> {
+    return Promise.all(input.map((input) => this.routesService.delete(input)));
   }
 
   @Mutation(() => Boolean)
