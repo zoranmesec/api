@@ -360,8 +360,6 @@ export class CragsService {
 
     setBuilderCache(builder);
 
-    this.logger.debug(builder.getSql());
-
     return builder;
   }
 
