@@ -52,6 +52,14 @@ export class FindCragsInput {
   @IsOptional()
   orientations?: string[];
 
+  @Field(() => [String], { nullable: true })
+  @IsOptional()
+  seasons?: string[];
+
+  @Field(() => [String], { nullable: true })
+  @IsOptional()
+  wallAngles?: string[];
+
   @Field({ nullable: true })
   @IsOptional()
   minGrade?: number;
@@ -61,10 +69,22 @@ export class FindCragsInput {
   maxGrade?: number;
 
   @Field({ nullable: true })
+  @IsOptional()
+  minApproachTime?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  maxApproachTime?: number;
+
+  @Field({ nullable: true })
   // minimum length 3 to avoid too generic names
   @MinLength(3)
   @IsOptional()
   name?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  rainproof?: boolean;
 
   // deprecated (ignored), frontend should handle this if necessary on crag list
   @Field({ nullable: true })

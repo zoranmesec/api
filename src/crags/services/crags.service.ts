@@ -291,6 +291,14 @@ export class CragsService {
       });
     }
 
+    if (params.seasons != null && params.seasons.length > 0) {
+      params.seasons.forEach((season, _index) => {
+        builder.andWhere(`:season = any (c.seasons)`, {
+          season: season,
+        });
+      });
+    }
+
     if (params.minGrade != null) {
       builder.andWhere('c.minDifficulty <= :minGrade', {
         minGrade: params.minGrade,
@@ -300,6 +308,32 @@ export class CragsService {
     if (params.maxGrade != null) {
       builder.andWhere('c.maxDifficulty >= :maxGrade', {
         maxGrade: params.maxGrade,
+      });
+    }
+
+    if (params.wallAngles != null && params.wallAngles.length > 0) {
+      params.wallAngles.forEach((wallAngle, _index) => {
+        builder.andWhere(`:wallAngle = any (c.wall_angles)`, {
+          wallAngle: wallAngle,
+        });
+      });
+    }
+
+    if (params.rainproof != null) {
+      builder.andWhere('c.rainproof = :rainproof', {
+        rainproof: params.rainproof,
+      });
+    }
+
+    if (params.minApproachTime != null) {
+      builder.andWhere('c.approach_time >= :minApproachTime', {
+        minApproachTime: params.minApproachTime,
+      });
+    }
+
+    if (params.maxApproachTime != null) {
+      builder.andWhere('c.approach_time <= :maxApproachTime', {
+        maxApproachTime: params.maxApproachTime,
       });
     }
 
@@ -325,6 +359,8 @@ export class CragsService {
     }
 
     setBuilderCache(builder);
+
+    this.logger.debug(builder.getSql());
 
     return builder;
   }
