@@ -284,19 +284,25 @@ export class CragsService {
     }
 
     if (params.orientations != null && params.orientations.length > 0) {
-      params.orientations.forEach((orientation, index) => {
-        builder.andWhere(`:orientation = any (c.orientations)`, {
-          orientation: orientation,
-        });
-      });
+      builder.andWhere(
+        params.allowEmpty
+          ? `(c.orientations && :orientations or c.orientations IS NULL)`
+          : 'c.orientations && :orientations',
+        {
+          orientations: params.orientations,
+        },
+      );
     }
 
     if (params.seasons != null && params.seasons.length > 0) {
-      params.seasons.forEach((season, _index) => {
-        builder.andWhere(`:season = any (c.seasons)`, {
-          season: season,
-        });
-      });
+      builder.andWhere(
+        params.allowEmpty
+          ? `(c.seasons && :seasons or c.seasons IS NULL)`
+          : 'c.seasons && :seasons',
+        {
+          seasons: params.seasons,
+        },
+      );
     }
 
     if (params.minGrade != null) {
@@ -312,17 +318,25 @@ export class CragsService {
     }
 
     if (params.wallAngles != null && params.wallAngles.length > 0) {
-      params.wallAngles.forEach((wallAngle, _index) => {
-        builder.andWhere(`:wallAngle = any (c.wall_angles)`, {
-          wallAngle: wallAngle,
-        });
-      });
+      builder.andWhere(
+        params.allowEmpty
+          ? `(c.wall_angles && :wallAngles or c.wall_angles IS NULL)`
+          : 'c.wall_angles && :wallAngles',
+        {
+          wallAngles: params.wallAngles,
+        },
+      );
     }
 
     if (params.rainproof != null) {
-      builder.andWhere('c.rainproof = :rainproof', {
-        rainproof: params.rainproof,
-      });
+      builder.andWhere(
+        params.allowEmpty
+          ? '(c.rainproof = :rainproof OR c.rainproof IS NULL)'
+          : 'c.rainproof = :rainproof',
+        {
+          rainproof: params.rainproof,
+        },
+      );
     }
 
     if (params.minApproachTime != null) {
